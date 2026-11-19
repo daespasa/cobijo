@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+      - name: Dependencias
+        run: |
+          npm ci
+          npm ci --prefix web
+      - name: Tests (parsers, geometría, login y sesiones)
+        run: npm test
+      - name: Build de la web (incluye comprobación de tipos)
+        run: npm run build
+      - name: Auditoría de dependencias de producción
+        run: |
+          npm audit --omit=dev
+          npm audit --omit=dev --prefix web
