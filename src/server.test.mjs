@@ -59,7 +59,7 @@ test("login, sesión de 30 días, preferencias, aislamiento y logout", async () 
   assert.equal((await fetch(`${base}/api/logout`, { method: "POST", headers: { ...cookie, ...json, origin: "https://evil.example" } })).status, 403);
 
   // preferencias
-  const prefs = { origin: { name: "Sueca", lat: 39.2, lng: -0.31 }, filters: { privacy: false, sort: "rating", provider: "airbnb" } };
+  const prefs = { origin: { name: "Sueca", lat: 39.2, lng: -0.31 }, filters: { privacy: false, freeOnly: true, minRating: 8, sort: "distance", provider: "airbnb" } };
   const put = await (await fetch(`${base}/api/me`, { method: "PUT", headers: { ...cookie, ...json }, body: JSON.stringify({ name: "Dani", prefs }) })).json();
   assert.equal(put.name, "Dani");
   assert.deepEqual(put.prefs, prefs);

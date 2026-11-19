@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { AnimatePresence, m } from "motion/react"
-import { Bath, BedDouble, CircleX, ExternalLink, LocateFixed, PawPrint, Star, TriangleAlert } from "lucide-react"
+import { Award, Bath, BedDouble, CalendarCheck, Car, CircleX, ExternalLink, LocateFixed, PawPrint, Sparkles, Star, TriangleAlert } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Slider } from "@/components/ui/slider"
@@ -9,16 +9,24 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { active, eur, nights, type Favorite, type Filters, type Result, type Search } from "@/lib/api"
 import { cn } from "@/lib/utils"
+import { formatTravel, type Travel } from "@/lib/travel"
 
 const SORTS = [
   { value: "price", label: "Más baratos primero" },
   { value: "rating", label: "Mejor valorados" },
+  { value: "distance", label: "Más cerca primero" },
   { value: "zone", label: "Por zona" },
 ]
 const PROVIDERS = [
   { value: "all", label: "Booking y Airbnb" },
   { value: "booking", label: "Solo Booking" },
   { value: "airbnb", label: "Solo Airbnb" },
+]
+const RATINGS = [
+  { value: "0", label: "Cualquier nota" },
+  { value: "7", label: "7 o más" },
+  { value: "8", label: "8 o más" },
+  { value: "9", label: "9 o más" },
 ]
 const STATUS: Record<Search["status"], string> = {
   queued: "En cola",
@@ -27,13 +35,16 @@ const STATUS: Record<Search["status"], string> = {
   cancelled: "Búsqueda cancelada",
   error: "La búsqueda se detuvo",
 }
-const score = (r: Result) => (r.rating == null ? -1 : r.provider === "airbnb" ? r.rating * 2 : r.rating) // Airbnb puntúa sobre 5
+// nota sobre 10 para comparar las dos webs (Airbnb puntúa sobre 5)
+export const score = (r: Pick<Result, "rating" | "provider">) => (r.rating == null ? -1 : r.provider === "airbnb" ? r.rating * 2 : r.rating) // Airbnb puntúa sobre 5
 
 
-export function useFilteredResults(search: Search | null, f: Filters) {
+export function useFilteredResults(search: Search | null, f: Filters, travelOf: (r: Result) => Travel | null) {
   return useMemo(() => {
     if (!search) return []
+    const far = (r: Result) => travelOf(r)?.minutes ?? (travelOf(r)?.km ?? 1e9) * 1.2 // sin ruta aún: aproximación por km
     const sorters: Record<string, (a: Result, b: Result) => number> = {
+      distance: (a, b) => far(a) - far(b),
       price: (a, b) => (a.per_person_night ?? 1e9) - (b.per_person_night ?? 1e9),
       rating: (a, b) => score(b) - score(a),
       zone: (a, b) => a.zone.localeCompare(b.zone) || (a.per_person_night ?? 1e9) - (b.per_person_night ?? 1e9),
@@ -41,15 +52,17 @@ export function useFilteredResults(search: Search | null, f: Filters) {
     return search.results
       .filter((r) => r.per_person_night != null && r.per_person_night <= f.max)
       .filter((r) => !f.privacy || r.fits_privacy)
+      .filter((r) => !f.freeOnly || r.free_cancellation === 1)
+      .filter((r) => !f.minRating || score(r) >= f.minRating)
       .filter((r) => f.provider === "all" || r.provider === f.provider)
-      .sort(sorters[f.sort])
-  }, [search, f])
+      .sort(sorters[f.sort] ?? sorters.price)
+  }, [search, f, travelOf])
 }
 
 
 // Tarjeta de alojamiento: la usan Resultados y Guardados
-export function ResultCard({ r, best = false, action, onLocate }: {
-  r: Result | Favorite; best?: boolean; action?: React.ReactNode; onLocate?: () => void
+export function ResultCard({ r, best = false, action, onLocate, travel, originName }: {
+  r: Result | Favorite; best?: boolean; action?: React.ReactNode; onLocate?: () => void; travel?: Travel | null; originName?: string
 }) {
   return (
     <>
@@ -64,6 +77,15 @@ export function ResultCard({ r, best = false, action, onLocate }: {
             <ExternalLink className="ml-1 inline size-3.5 align-[-2px] opacity-0 transition-opacity group-hover:opacity-60" />
           </a>
           {r.location && <p className="truncate text-sm text-muted-foreground">{r.location}</p>}
+          {travel && (
+            <p className="mt-1 inline-flex items-center gap-1.5 text-sm text-night/80">
+              <Car className="size-4 shrink-0 text-muted-foreground" />
+              <span>
+                {formatTravel(travel)}
+                {originName && <span className="text-muted-foreground"> desde {originName}</span>}
+              </span>
+            </p>
+          )}
         </div>
         <div className="shrink-0 text-right">
           <p className={cn("font-heading text-2xl font-semibold leading-none tabular-nums", r.fits_budget ? "text-pine" : "text-rose")}>{eur(r.per_person_night)}</p>
@@ -71,17 +93,24 @@ export function ResultCard({ r, best = false, action, onLocate }: {
           <p className="text-xs text-muted-foreground">{eur(r.total_price)} en total</p>
         </div>
       </div>
+      {(r.free_cancellation === 1 || r.guest_favorite === 1 || r.is_new === 1) && (
+        <div className="mt-2.5 flex flex-wrap gap-1.5 text-xs font-medium">
+          {r.free_cancellation === 1 && <span className="inline-flex items-center gap-1 rounded-full bg-pine-soft px-2 py-0.5 text-pine"><CalendarCheck className="size-3.5" /> Cancelación gratis</span>}
+          {r.guest_favorite === 1 && <span className="inline-flex items-center gap-1 rounded-full bg-amber/20 px-2 py-0.5 text-night"><Award className="size-3.5 text-amber" /> Recomendación del viajero</span>}
+          {r.is_new === 1 && <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-muted-foreground"><Sparkles className="size-3.5" /> Nuevo, sin valoraciones</span>}
+        </div>
+      )}
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
         <span className={cn("inline-flex items-center gap-1.5", !r.fits_privacy && "text-rose")}>
           {r.fits_privacy ? <BedDouble className="size-4 text-pine" /> : <TriangleAlert className="size-4" />}
-          {r.private_rooms ?? "?"} dormitorios
+          {r.private_rooms ?? "?"} {r.private_rooms === 1 ? "dormitorio" : "dormitorios"}
         </span>
-        {r.bathrooms != null && <span className="inline-flex items-center gap-1.5"><Bath className="size-4 text-muted-foreground" />{r.bathrooms}</span>}
+        {r.bathrooms != null && <span className="inline-flex items-center gap-1.5"><Bath className="size-4 text-muted-foreground" />{r.bathrooms.toLocaleString("es-ES")} {r.bathrooms === 1 ? "baño" : "baños"}</span>}
         {r.rating != null && (
           <span className="inline-flex items-center gap-1.5">
             <Star className="size-4 fill-amber text-amber" />
-            {r.rating.toLocaleString("es-ES")}{r.provider === "airbnb" ? "/5" : "/10"}
-            {r.reviews != null && <span className="text-muted-foreground">({r.reviews.toLocaleString("es-ES")})</span>}
+            <b className="font-semibold">{r.rating.toLocaleString("es-ES")}</b>
+            <span className="text-muted-foreground">{r.provider === "airbnb" ? "de 5" : "de 10"}{r.reviews != null && `, ${r.reviews.toLocaleString("es-ES")} ${r.reviews === 1 ? "opinión" : "opiniones"}`}</span>
           </span>
         )}
         <span className="ml-auto flex items-center gap-1">
@@ -108,10 +137,12 @@ type Props = {
   onCancel: () => void
   onNewSearch: () => void
   saveButton: (r: Result) => React.ReactNode
+  travelOf: (r: Result) => Travel | null
+  originName: string
   onSaveFilters: () => void
 }
 
-export function Results({ search, list, filters, setFilters, activeId, setActiveId, onLocate, onCancel, onNewSearch, saveButton, onSaveFilters }: Props) {
+export function Results({ search, list, filters, setFilters, activeId, setActiveId, onLocate, onCancel, onNewSearch, saveButton, onSaveFilters, travelOf, originName }: Props) {
   const refs = useRef(new Map<number, HTMLElement>())
   const [cancelling, setCancelling] = useState(false)
   useEffect(() => {
@@ -132,7 +163,8 @@ export function Results({ search, list, filters, setFilters, activeId, setActive
   const p = search.params
   const running = active(search)
   const set = <K extends keyof Filters>(k: K, v: Filters[K]) => setFilters({ ...filters, [k]: v })
-  const bestId = list.find((r) => r.fits_budget && r.fits_privacy)?.id
+  // el más barato que encaja, sea cual sea el orden elegido
+  const bestId = list.filter((r) => r.fits_budget && r.fits_privacy).sort((a, b) => (a.per_person_night ?? 1e9) - (b.per_person_night ?? 1e9))[0]?.id
 
   return (
     <div className="space-y-5">
@@ -183,6 +215,19 @@ export function Results({ search, list, filters, setFilters, activeId, setActive
           </span>
           <Switch checked={filters.privacy} onCheckedChange={(v) => set("privacy", v)} />
         </label>
+        <label className="flex items-center justify-between gap-3 text-sm sm:col-span-2">
+          <span>
+            <span className="font-medium">Solo con cancelación gratis</span>
+            <span className="block text-xs text-muted-foreground">
+              {p.freeCancellation ? "Esta búsqueda ya la pidió a las dos webs" : "En Airbnb solo se sabe si lo marcas antes de buscar"}
+            </span>
+          </span>
+          <Switch checked={filters.freeOnly} onCheckedChange={(v) => set("freeOnly", v)} />
+        </label>
+        <Select value={String(filters.minRating)} onValueChange={(v) => set("minRating", Number(v))} items={RATINGS}>
+          <SelectTrigger className="w-full sm:col-span-2" aria-label="Nota mínima"><Star className="text-amber" /><SelectValue /></SelectTrigger>
+          <SelectContent>{RATINGS.map((o) => <SelectItem key={o.value} value={o.value}>{o.value === "0" ? o.label : `${o.label} (Airbnb ${Number(o.value) / 2} de 5)`}</SelectItem>)}</SelectContent>
+        </Select>
         <Select value={filters.provider} onValueChange={(v) => set("provider", String(v))} items={PROVIDERS}>
           <SelectTrigger className="w-full" aria-label="Web"><SelectValue /></SelectTrigger>
           <SelectContent>{PROVIDERS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
@@ -218,7 +263,7 @@ export function Results({ search, list, filters, setFilters, activeId, setActive
                 r.id === bestId && "ring-2 ring-amber/70"
               )}
             >
-              <ResultCard r={r} best={r.id === bestId} action={saveButton(r)} onLocate={() => onLocate(r)} />
+              <ResultCard r={r} best={r.id === bestId} action={saveButton(r)} onLocate={() => onLocate(r)} travel={travelOf(r)} originName={originName} />
             </m.li>
           ))}
         </AnimatePresence>
@@ -227,7 +272,7 @@ export function Results({ search, list, filters, setFilters, activeId, setActive
 
       {!running && list.length === 0 && (
         <div className="rounded-xl border border-dashed border-input p-6 text-center text-sm text-muted-foreground">
-          Nada encaja con estos filtros. Sube el precio o desactiva «Un dormitorio por pareja» para ver el resto.
+          Nada encaja con estos filtros. Sube el precio, baja la nota mínima o desactiva «Un dormitorio por pareja» o «Solo con cancelación gratis».
         </div>
       )}
 

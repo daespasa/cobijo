@@ -70,7 +70,8 @@ const FAVORITES_SQL = `CREATE TABLE favorites (
   rating REAL, reviews INTEGER, fits_budget INTEGER, fits_privacy INTEGER, lat REAL, lng REAL,
   UNIQUE (list_id, url)
 )`;
-export const FAV_COLS = "url, provider, zone, title, location, total_price, per_person_night, private_rooms, bathrooms, beds, rating, reviews, fits_budget, fits_privacy, lat, lng";
+export const FAV_COLS =
+  "url, provider, zone, title, location, total_price, per_person_night, private_rooms, bathrooms, beds, rating, reviews, fits_budget, fits_privacy, lat, lng, free_cancellation, is_new, guest_favorite";
 const favCols = db.prepare("SELECT name FROM pragma_table_info('favorites')").all().map((c) => c.name);
 if (!favCols.length) db.exec(FAVORITES_SQL);
 else if (!favCols.includes("list_id")) {
@@ -84,6 +85,13 @@ else if (!favCols.includes("list_id")) {
     db.exec("DROP TABLE favorites_old");
   })();
 }
+// cancelación gratis (1 sí, 0 no, NULL no se sabe), alojamiento nuevo y «Recomendación del viajero» de Airbnb
+for (const table of ["results", "favorites"])
+  for (const col of ["free_cancellation INTEGER", "is_new INTEGER", "guest_favorite INTEGER"]) {
+    try {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${col}`);
+    } catch {}
+  }
 db.exec("CREATE INDEX IF NOT EXISTS favorites_list ON favorites(list_id)");
 
 // ---------- contraseñas (scrypt, de la librería estándar) ----------

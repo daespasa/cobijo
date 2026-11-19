@@ -1,7 +1,7 @@
 import type { ComponentType } from "react"
 import { AnimatePresence, m } from "motion/react"
 import {
-  AirVent, Bath, BedDouble, Building, Car, CircleDot, CookingPot, Drumstick, Flame, Heater, Loader2, Minus,
+  AirVent, Bath, BedDouble, CalendarCheck, Building, Car, CircleDot, CookingPot, Drumstick, Flame, Heater, Loader2, Minus,
   PawPrint, Pentagon, Plus, Search, Users, WashingMachine, Waves, Wifi, X, type LucideProps,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -134,7 +134,7 @@ export function SearchForm({ meta, form, setForm, zones, onRemoveZone, onSubmit,
       <Section title="El grupo">
         <div className="divide-y divide-border rounded-xl border border-border bg-card px-3">
           <Stepper icon={Users} label="Personas" value={form.adults} min={1} max={30} onChange={(v) => set("adults", v)} />
-          <Stepper icon={BedDouble} label="Dormitorios" hint="Uno por pareja para tener intimidad" value={form.bedrooms} min={0} max={15} onChange={(v) => set("bedrooms", v)} />
+          <Stepper icon={BedDouble} label="Dormitorios" hint="Uno por pareja" value={form.bedrooms} min={0} max={15} onChange={(v) => set("bedrooms", v)} />
           <Stepper icon={PawPrint} label="Mascotas" value={form.pets} min={0} max={5} onChange={(v) => set("pets", v)} />
         </div>
       </Section>
@@ -161,6 +161,17 @@ export function SearchForm({ meta, form, setForm, zones, onRemoveZone, onSubmit,
           ))}
         </div>
       </Section>
+
+      <label className={cn("flex cursor-pointer items-center justify-between gap-3 rounded-xl border p-3 transition-colors", form.freeCancellation ? "border-pine bg-pine-soft" : "border-border bg-card")}>
+        <span className="flex items-center gap-3">
+          <CalendarCheck className="size-5 shrink-0 text-pine" aria-hidden />
+          <span>
+            <span className="block text-sm font-medium">Solo con cancelación gratis</span>
+            <span className="block text-xs text-muted-foreground">Lo filtran Booking y Airbnb al buscar</span>
+          </span>
+        </span>
+        <Switch checked={!!form.freeCancellation} onCheckedChange={(v) => set("freeCancellation", v)} />
+      </label>
 
       <Section title="Comodidades" aside={form.amenities.length > 0 && <button type="button" className="text-xs text-pine hover:underline" onClick={() => set("amenities", [])}>Quitar todas</button>}>
         <div className="flex flex-wrap gap-1.5">

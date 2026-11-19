@@ -61,6 +61,7 @@ export function buildBookingUrl(q, zone) {
   const nflt = ["privacy_type=3"]; // alojamientos enteros
   if (q.pets) nflt.push("hotelfacility=4");
   if (q.bedrooms) nflt.push(`entire_place_bedroom_count=${q.bedrooms}`);
+  if (q.freeCancellation) nflt.push("fc=2");
   for (const a of q.amenities || []) if (AMENITIES[a]?.booking) nflt.push(AMENITIES[a].booking);
   const p = {
     latitude: g.center.lat.toFixed(5),
@@ -97,7 +98,8 @@ export function buildAirbnbUrl(q, zone) {
     pets: q.pets || 0,
     min_bedrooms: q.bedrooms || 0,
     currency: "EUR",
-    "room_types[]": "Entire home/apt"
+    "room_types[]": "Entire home/apt",
+    ...(q.freeCancellation ? { flexible_cancellation: true } : {})
   };
   for (const [k, v] of Object.entries(p)) u.searchParams.set(k, String(v));
   for (const a of q.amenities || []) if (AMENITIES[a]?.airbnb) u.searchParams.append("amenities[]", String(AMENITIES[a].airbnb));
@@ -135,7 +137,8 @@ export function parseBookingCard(text) {
     privateRooms: privateRooms || null,
     bathrooms: bathrooms || null,
     units: units || null,
-    totalPrice: price
+    totalPrice: price,
+    freeCancellation: /cancelaci[oó]n gratis/i.test(text) ? 1 : 0
   };
 }
 
@@ -151,8 +154,10 @@ export function parseAirbnbCard(text) {
     reviews: num(/\d,\d+\s*\((\d+)\)/, text),
     privateRooms: num(/(\d+)\s+dormitorios?/, text),
     beds: num(/(\d+)\s+camas?/, text),
-    bathrooms: null,
-    totalPrice: totals.length ? euros(totals[0][1]) : null
+    bathrooms: num(/(\d+(?:,\d+)?)\s+baños?/, text),
+    totalPrice: totals.length ? euros(totals[0][1]) : null,
+    isNew: /alojamiento nuevo|^nuevo$/im.test(text) ? 1 : 0,
+    guestFavorite: /recomendaci[oó]n del viajero/i.test(text) ? 1 : 0
   };
 }
 
@@ -264,7 +269,14 @@ export async function searchAirbnb(page, zone, trip, { pages = 2 } = {}) {
       const id = c.href?.match(/\/rooms\/(\d+)/)?.[1];
       // Airbnb mezcla sugerencias con otras fechas: su precio no es comparable
       const sameDates = c.href?.includes(`check_in=${trip.checkin}`) && c.href.includes(`check_out=${trip.checkout}`);
-      if (id && sameDates && !byId.has(id)) byId.set(id, { provider: "airbnb", zone: zone.name, url: cleanUrl(c.href), ...parseAirbnbCard(c.text), ...coords.get(id) });
+      if (id && sameDates && !byId.has(id)) byId.set(id, {
+        provider: "airbnb",
+        zone: zone.name,
+        url: cleanUrl(c.href),
+        ...parseAirbnbCard(c.text),
+        ...coords.get(id),
+        freeCancellation: trip.freeCancellation ? 1 : null // la tarjeta no lo dice: solo lo sabemos si se filtró
+      });
     }
     const next = page.locator('a[aria-label="Siguiente"]');
     if (!(await next.isVisible().catch(() => false))) break;

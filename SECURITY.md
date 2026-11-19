@@ -16,7 +16,7 @@ Lo que protege:
 - **Fuerza bruta**: 10 intentos fallidos por IP bloquean el login 15 minutos.
 - **Aislamiento**: cada usuario solo ve y modifica sus búsquedas, listas y guardados (cubierto por `src/server.test.mjs`).
 - **Entrada**: toda la entrada se valida en el servidor (fechas, rangos, zonas, comodidades, tamaño máximo del cuerpo). Lo que se guarda en una lista se copia de datos del servidor, nunca de lo que mande el navegador.
-- **Navegador**: `Content-Security-Policy` estricta (solo scripts propios, mapas de Esri y Nominatim), `X-Frame-Options: DENY`, `nosniff`. Los textos que vienen de Booking/Airbnb se escapan antes de pintarse.
+- **Navegador**: `Content-Security-Policy` estricta (solo scripts propios, mapa de OpenFreeMap, Nominatim para lugares y OSRM para rutas), `X-Frame-Options: DENY`, `nosniff`. Los textos que vienen de Booking/Airbnb se escapan antes de pintarse.
 - **Ficheros**: el servidor solo sirve lo que hay en `public/`, sin poder salir de esa carpeta.
 - **Recursos**: máximo 3 búsquedas pendientes por usuario; un único Chromium a la vez.
 

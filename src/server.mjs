@@ -29,12 +29,13 @@ purgeExpiredSessions();
 db.prepare("UPDATE searches SET status='error', error='Interrumpida (se reinició el servidor)' WHERE status='running'").run();
 
 const insertResult = db.prepare(`INSERT INTO results
-  (search_id, zone, provider, url, title, location, total_price, per_person_night, private_rooms, bathrooms, beds, rating, reviews, fits_budget, fits_privacy, lat, lng)
-  VALUES (@search_id, @zone, @provider, @url, @title, @location, @totalPrice, @perPersonNight, @privateRooms, @bathrooms, @beds, @rating, @reviews, @fitsBudget, @fitsPrivacy, @lat, @lng)`);
+  (search_id, zone, provider, url, title, location, total_price, per_person_night, private_rooms, bathrooms, beds, rating, reviews, fits_budget, fits_privacy, lat, lng, free_cancellation, is_new, guest_favorite)
+  VALUES (@search_id, @zone, @provider, @url, @title, @location, @totalPrice, @perPersonNight, @privateRooms, @bathrooms, @beds, @rating, @reviews, @fitsBudget, @fitsPrivacy, @lat, @lng, @freeCancellation, @isNew, @guestFavorite)`);
 const insertMany = db.transaction((searchId, items) => {
   for (const i of items) {
     insertResult.run({
-      beds: null, bathrooms: null, rating: null, reviews: null, location: null, lat: null, lng: null, ...i,
+      beds: null, bathrooms: null, rating: null, reviews: null, location: null, lat: null, lng: null,
+      freeCancellation: null, isNew: null, guestFavorite: null, ...i,
       search_id: searchId, fitsBudget: i.fitsBudget ? 1 : 0, fitsPrivacy: i.fitsPrivacy ? 1 : 0
     });
   }
@@ -94,7 +95,8 @@ function cleanForm(b) {
     maxPerPersonNight: typeof b.maxPerPersonNight === "number" && b.maxPerPersonNight > 0 && b.maxPerPersonNight <= 2000 ? b.maxPerPersonNight : null,
     pages: int(b.pages, 1, 5),
     amenities: Array.isArray(b.amenities) ? b.amenities.filter((a) => Object.hasOwn(AMENITIES, a)) : [],
-    providers: Array.isArray(b.providers) ? [...new Set(b.providers.filter((p) => ["booking", "airbnb"].includes(p)))] : []
+    providers: Array.isArray(b.providers) ? [...new Set(b.providers.filter((p) => ["booking", "airbnb"].includes(p)))] : [],
+    freeCancellation: b.freeCancellation === true
   };
   for (const k of ["adults", "bedrooms", "pets", "maxPerPersonNight", "pages"]) if (f[k] === null) errors.push(`Valor no válido: ${k}`);
   if (!f.providers.length) errors.push("Elige al menos una web");
@@ -110,7 +112,7 @@ export function validate(b) {
 }
 
 // Preferencias: salida, valores del formulario y filtros de resultados. Cada parte es opcional.
-const SORTS = ["price", "rating", "zone"];
+const SORTS = ["price", "rating", "distance", "zone"];
 const PROVIDER_FILTERS = ["all", "booking", "airbnb"];
 export function cleanPrefs(b) {
   const prefs = {};
@@ -128,6 +130,8 @@ export function cleanPrefs(b) {
   if (b?.filters != null) {
     prefs.filters = {
       privacy: b.filters.privacy !== false,
+      freeOnly: b.filters.freeOnly === true,
+      minRating: [0, 7, 8, 9].includes(b.filters.minRating) ? b.filters.minRating : 0,
       sort: SORTS.includes(b.filters.sort) ? b.filters.sort : "price",
       provider: PROVIDER_FILTERS.includes(b.filters.provider) ? b.filters.provider : "all"
     };
@@ -138,7 +142,7 @@ export function cleanPrefs(b) {
 // --- HTTP ---
 const PUBLIC = path.join(ROOT, "public"); // build de web/ (npm run build)
 const TYPES = {
-  ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
+  ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
   ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2", ".ico": "image/x-icon"
 };
 function staticFile(pathname) {
@@ -147,14 +151,15 @@ function staticFile(pathname) {
   return file;
 }
 
-// Cabeceras de seguridad para todo: solo cargamos lo nuestro, los mapas de Esri y el buscador de OpenStreetMap
+// Cabeceras de seguridad para todo: solo cargamos lo nuestro, el mapa de OpenFreeMap, Nominatim (lugares) y OSRM (rutas)
 const SECURITY_HEADERS = {
   "content-security-policy": [
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'", // Leaflet y las animaciones ponen estilos en línea
-    "img-src 'self' data: https://server.arcgisonline.com",
-    "connect-src 'self' https://nominatim.openstreetmap.org",
+    "img-src 'self' data: blob: https://tiles.openfreemap.org https://tile.openstreetmap.org", // OSM: respaldo sin WebGL
+    "connect-src 'self' https://tiles.openfreemap.org https://nominatim.openstreetmap.org https://router.project-osrm.org",
+    "worker-src 'self' blob:", // MapLibre dibuja el mapa en un web worker
     "font-src 'self'",
     "frame-ancestors 'none'",
     "base-uri 'none'",

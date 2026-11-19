@@ -27,6 +27,32 @@ type Props = {
 }
 
 const PINE = "#1f5c4a"
+const STYLE = "https://tiles.openfreemap.org/styles/positron"
+
+async function loadSpanishBasemap(m: L.Map) {
+  let alive = true // el mapa puede desmontarse antes de que acabe la carga
+  m.once("unload", () => void (alive = false))
+  try {
+    const [{ maplibreGL }, style, maplibre, worker] = await Promise.all([
+      import("@maplibre/maplibre-gl-leaflet"),
+      fetch(STYLE).then((r) => r.json()),
+      import("maplibre-gl"),
+      import("maplibre-gl/dist/maplibre-gl-worker.mjs?url"), // el worker va en su propio fichero
+      import("maplibre-gl/dist/maplibre-gl.css"),
+    ])
+    maplibre.setWorkerUrl(worker.default)
+    for (const layer of style.layers) {
+      const field = layer.layout?.["text-field"]
+      // etiquetas de lugares: nombre en español, si no en inglés, si no el local
+      if (field && JSON.stringify(field).includes("name")) layer.layout["text-field"] = ["coalesce", ["get", "name:es"], ["get", "name_en"], ["get", "name"]]
+    }
+    if (!alive) return
+    maplibreGL({ style, attributionControl: false }).addTo(m)
+  } catch {
+    // sin WebGL o sin red: mapa de OpenStreetMap normal (nombres en el idioma local)
+    if (alive) L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(m)
+  }
+}
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
 export function MapView({ ref, zones, onAddZone, onRemoveZone, onClearZones, onPresets, results, activeId, onPinClick, origin }: Props) {
@@ -49,16 +75,16 @@ export function MapView({ ref, zones, onAddZone, onRemoveZone, onClearZones, onP
     const shapes = layers.current?.zones.getLayers() as L.Path[] | undefined
     if (shapes?.length) map.current?.fitBounds(L.featureGroup(shapes).getBounds(), { padding: [40, 40], maxZoom: 11 })
   }
-  useImperativeHandle(ref, () => ({ flyTo: (lat, lng, zoom = 13) => map.current?.flyTo([lat, lng], Math.min(zoom, 16), { duration: 0.8 }), fitZones }))
+  useImperativeHandle(ref, () => ({ flyTo: (lat, lng, zoom = 13) => map.current?.flyTo([lat, lng], zoom, { duration: 0.8 }), fitZones }))
 
   // --- init ---
   useEffect(() => {
-    const m = L.map(el.current!, { zoomControl: false, maxZoom: 16 }).setView([40.1, -2.6], 6)
+    const m = L.map(el.current!, { zoomControl: false, maxZoom: 18 }).setView([40.1, -2.6], 6)
     L.control.zoom({ position: "bottomright" }).addTo(m)
-    // base gris claro sin ruido + capa de nombres encima: la zona y los precios son lo que destaca
-    const esri = (layer: string) => `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/${layer}/MapServer/tile/{z}/{y}/{x}`
-    L.tileLayer(esri("World_Light_Gray_Base"), { maxZoom: 16, attribution: "Mapa © Esri, HERE, Garmin, © OpenStreetMap" }).addTo(m)
-    L.tileLayer(esri("World_Light_Gray_Reference"), { maxZoom: 16, pane: "overlayPane" }).addTo(m)
+    // Mapa vectorial de OpenFreeMap (gratis, sin clave) con los nombres en español allí donde existan.
+    // MapLibre pesa bastante: se carga aparte, sin retrasar el resto de la app.
+    m.attributionControl.addAttribution('<a href="https://openfreemap.org">OpenFreeMap</a> © <a href="https://www.openmaptiles.org/">OpenMapTiles</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>')
+    loadSpanishBasemap(m)
     layers.current = { zones: L.layerGroup().addTo(m), draft: L.layerGroup().addTo(m), pins: L.featureGroup().addTo(m) }
     m.on("click", (e) => {
       const s = live.current

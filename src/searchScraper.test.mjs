@@ -65,3 +65,23 @@ test("coordenadas desde los datos internos de cada web", () => {
   const ab = airbnbCoords(`"id":"${id}","location":{"__typename":"DemandStayListingLocation","coordinate":{"__typename":"Coordinate","latitude":37.105,"longitude":-3.586}}`);
   assert.deepEqual(ab.get("893930296093917414"), { lat: 37.105, lng: -3.586 });
 });
+
+test("cancelación gratis, baños y distintivos de Airbnb", () => {
+  const bk = parseBookingCard("Casa X\n1×\nCasa entera • 4 dormitorios • 2 baños\nCancelación gratis\nPrecio € 900");
+  assert.equal(bk.freeCancellation, 1);
+  assert.equal(parseBookingCard("Casa Y\nPrecio € 900").freeCancellation, 0);
+  const fav = parseAirbnbCard("Foto 1 de 6\nRecomendación del viajero\nVivienda en Turís\nValoración media de 4,97 sobre 5, 32 evaluaciones\n4,97 (32)\nVilla\n4 dormitorios\n1,5 baños\n900 € en total");
+  assert.equal(fav.guestFavorite, 1);
+  assert.equal(fav.bathrooms, 1.5);
+  assert.equal(fav.title, "Vivienda en Turís");
+  assert.equal(fav.isNew, 0);
+  const nuevo = parseAirbnbCard("Foto 1 de 6\nVivienda en Catadau\nAlojamiento nuevo\nNuevo\nVilla\n4 dormitorios\n900 € en total");
+  assert.equal(nuevo.isNew, 1);
+  assert.equal(nuevo.rating, null);
+  const q = { ...TRIP, amenities: [], freeCancellation: true };
+  const zone = { type: "circle", name: "Venecia", lat: 45.44, lng: 12.33, km: 20 };
+  assert.match(new URL(buildBookingUrl(q, zone)).searchParams.get("nflt"), /fc=2/);
+  const a = new URL(buildAirbnbUrl(q, zone));
+  assert.equal(a.searchParams.get("flexible_cancellation"), "true");
+  assert.match(a.pathname, /Venecia/); // fuera de España no se añade nada del país
+});

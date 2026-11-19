@@ -13,6 +13,7 @@ export type Params = {
   pages: number
   amenities: string[]
   providers: ("booking" | "airbnb")[]
+  freeCancellation?: boolean
   zones: Zone[]
 }
 
@@ -34,6 +35,9 @@ export type Result = {
   fits_privacy: 0 | 1
   lat: number | null
   lng: number | null
+  free_cancellation: 0 | 1 | null
+  is_new: 0 | 1 | null
+  guest_favorite: 0 | 1 | null
 }
 
 export type Status = "queued" | "running" | "done" | "cancelled" | "error"
@@ -55,7 +59,7 @@ export type Meta = {
   amenities: { key: string; label: string; only: "booking" | "airbnb" | null }[]
 }
 
-export type Filters = { max: number; privacy: boolean; provider: string; sort: string }
+export type Filters = { max: number; privacy: boolean; freeOnly: boolean; minRating: number; provider: string; sort: string }
 export type Prefs = {
   origin?: { name: string; lat: number; lng: number }
   form?: Omit<Params, "zones">
@@ -109,7 +113,7 @@ export const eur = (n: number | null | undefined, digits = 0) =>
 // Nominatim (OpenStreetMap): solo cuando el usuario busca un lugar o cierra una zona
 const osm = (path: string) => fetch(`https://nominatim.openstreetmap.org/${path}&format=jsonv2&accept-language=es`).then((r) => r.json())
 export async function geocode(q: string) {
-  const [r] = await osm(`search?q=${encodeURIComponent(q)}&countrycodes=es&limit=1`)
+  const [r] = await osm(`search?q=${encodeURIComponent(q)}&limit=1`)
   return r ? { name: r.name as string, lat: Number(r.lat), lng: Number(r.lon) } : null
 }
 export async function placeName(lat: number, lng: number) {

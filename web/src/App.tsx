@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Heart, History as HistoryIcon, House, List, Loader2, Search as SearchIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -10,6 +10,7 @@ import { Login } from "@/components/Login"
 import { Saved } from "@/components/Saved"
 import { UserMenu } from "@/components/UserMenu"
 import { SaveMenu } from "@/components/SaveMenu"
+import { useTravel } from "@/lib/travel"
 import {
   active, api, placeName, setUnauthorizedHandler,
   type Favorite, type Filters, type Meta, type Params, type Result, type SaveSource, type SavedList, type Search, type SearchSummary, type User, type Zone,
@@ -59,14 +60,17 @@ function Workspace({ user, onUser, onLogout }: { user: User; onUser: (u: User) =
   const [tab, setTab] = useState<Tab>("buscar")
   const [search, setSearch] = useState<Search | null>(null)
   const [history, setHistory] = useState<SearchSummary[]>([])
-  const [filters, setFilters] = useState<Filters>({ max: 60, privacy: true, provider: "all", sort: "price" })
+  const [filters, setFilters] = useState<Filters>({ max: 60, privacy: true, freeOnly: false, minRating: 0, provider: "all", sort: "price" })
   const [activeId, setActiveId] = useState<number | null>(null)
   const [favorites, setFavorites] = useState<Favorite[]>([])
   const [lists, setLists] = useState<SavedList[]>([])
   const [listId, setListId] = useState<number | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const mapApi = useRef<MapApi>(null)
-  const list = useFilteredResults(search, filters)
+  // distancias desde el punto de salida del usuario (si no ha puesto uno, el de serie)
+  const origin = useMemo(() => user.prefs.origin ?? meta?.origin ?? { name: "", lat: 0, lng: 0 }, [user.prefs.origin, meta])
+  const travelOf = useTravel(origin, meta ? [...(search?.results ?? []), ...favorites] : [])
+  const list = useFilteredResults(search, filters, travelOf)
 
   const refreshHistory = useCallback(() => api.list().then(setHistory).catch(() => {}), [])
 
@@ -102,9 +106,9 @@ function Workspace({ user, onUser, onLogout }: { user: User; onUser: (u: User) =
     }
   }
   const saveFilters = async () => {
-    const { privacy, sort, provider } = filters
+    const { privacy, freeOnly, minRating, sort, provider } = filters
     try {
-      onUser(await api.updateMe({ prefs: { filters: { privacy, sort, provider } } }))
+      onUser(await api.updateMe({ prefs: { filters: { privacy, freeOnly, minRating, sort, provider } } }))
       toast.success("Filtros guardados como tus predeterminados")
     } catch (e) {
       toast.error((e as Error).message)
@@ -300,6 +304,8 @@ function Workspace({ user, onUser, onLogout }: { user: User; onUser: (u: User) =
                 onNewSearch={() => setTab("buscar")}
                 saveButton={(r) => saveButton(r, { resultId: r.id })}
                 onSaveFilters={saveFilters}
+                travelOf={travelOf}
+                originName={origin.name}
               />
             </TabsContent>
             <TabsContent value="guardados" className="pb-8">
@@ -313,6 +319,8 @@ function Workspace({ user, onUser, onLogout }: { user: User; onUser: (u: User) =
                 onDelete={deleteList}
                 onLocate={(f) => locate({ ...f, id: -f.id })}
                 saveButton={(f) => saveButton(f, { favoriteId: f.id })}
+                travelOf={travelOf}
+                originName={origin.name}
               />
             </TabsContent>
             <TabsContent value="historial" className="pb-8">
@@ -355,7 +363,7 @@ function Workspace({ user, onUser, onLogout }: { user: User; onUser: (u: User) =
             setTab(id < 0 ? "guardados" : "resultados")
             setActiveId(id)
           }}
-          origin={user.prefs.origin ?? meta.origin}
+          origin={origin}
         />
       </main>
     </div>
