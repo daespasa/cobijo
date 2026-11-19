@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseBookingCard, parseAirbnbCard, evaluate, buildBookingUrl, buildAirbnbUrl, insideZone, zoneGeometry, bookingCoords, airbnbCoords } from "./searchScraper.mjs";
+import { parseBookingCard, parseAirbnbCard, evaluate, buildBookingUrl, buildAirbnbUrl, insideZone, zoneGeometry, bookingCoords, airbnbCoords, createGeocoder } from "./searchScraper.mjs";
 
 const TRIP = { checkin: "2026-12-31", checkout: "2027-01-03", adults: 8, bedrooms: 4, pets: 2, maxPerPersonNight: 60 };
 
@@ -84,4 +84,18 @@ test("cancelación gratis, baños y distintivos de Airbnb", () => {
   const a = new URL(buildAirbnbUrl(q, zone));
   assert.equal(a.searchParams.get("flexible_cancellation"), "true");
   assert.match(a.pathname, /Venecia/); // fuera de España no se añade nada del país
+});
+
+test("distancia al centro y nota de ubicación", async () => {
+  const km = parseBookingCard("Be Free Granada\nChana, GranadaMostrar en el mapa\na 2,5 km del centro\nPuntuación: 8,2\nUbicación 9,5\nPrecio € 900");
+  assert.equal(km.locationScore, 9.5);
+  assert.equal(km.location, "Chana, Granada");
+  assert.equal(parseBookingCard("Casa\nUbicación 10\nPrecio € 900").locationScore, 10);
+  // el geocodificador resuelve municipio → centro desde la caché, sin preguntar a Nominatim
+  const store = new Map([
+    ["town|1239,-120", { name: "Granada", lat: null, lng: null }],
+    ["center|granada|74,-7", { name: "Granada", lat: 37.1773, lng: -3.5986 }]
+  ]);
+  const geo = createGeocoder({ get: (k) => store.get(k), set: (k, v) => store.set(k, v) });
+  assert.deepEqual(await geo(37.18, -3.59), { name: "Granada", lat: 37.1773, lng: -3.5986 }); // un piso en el Albaicín cuenta como Granada
 });

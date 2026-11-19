@@ -38,6 +38,9 @@ export type Result = {
   free_cancellation: 0 | 1 | null
   is_new: 0 | 1 | null
   guest_favorite: 0 | 1 | null
+  center_km: number | null
+  center_name: string | null
+  location_score: number | null
 }
 
 export type Status = "queued" | "running" | "done" | "cancelled" | "error"
@@ -59,7 +62,7 @@ export type Meta = {
   amenities: { key: string; label: string; only: "booking" | "airbnb" | null }[]
 }
 
-export type Filters = { max: number; privacy: boolean; freeOnly: boolean; minRating: number; provider: string; sort: string }
+export type Filters = { max: number; privacy: boolean; freeOnly: boolean; minRating: number; maxCenterKm: number; provider: string; sort: string }
 export type Prefs = {
   origin?: { name: string; lat: number; lng: number }
   form?: Omit<Params, "zones">

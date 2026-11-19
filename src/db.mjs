@@ -71,7 +71,7 @@ const FAVORITES_SQL = `CREATE TABLE favorites (
   UNIQUE (list_id, url)
 )`;
 export const FAV_COLS =
-  "url, provider, zone, title, location, total_price, per_person_night, private_rooms, bathrooms, beds, rating, reviews, fits_budget, fits_privacy, lat, lng, free_cancellation, is_new, guest_favorite";
+  "url, provider, zone, title, location, total_price, per_person_night, private_rooms, bathrooms, beds, rating, reviews, fits_budget, fits_privacy, lat, lng, free_cancellation, is_new, guest_favorite, center_km, center_name, location_score";
 const favCols = db.prepare("SELECT name FROM pragma_table_info('favorites')").all().map((c) => c.name);
 if (!favCols.length) db.exec(FAVORITES_SQL);
 else if (!favCols.includes("list_id")) {
@@ -87,12 +87,14 @@ else if (!favCols.includes("list_id")) {
 }
 // cancelación gratis (1 sí, 0 no, NULL no se sabe), alojamiento nuevo y «Recomendación del viajero» de Airbnb
 for (const table of ["results", "favorites"])
-  for (const col of ["free_cancellation INTEGER", "is_new INTEGER", "guest_favorite INTEGER"]) {
+  for (const col of ["free_cancellation INTEGER", "is_new INTEGER", "guest_favorite INTEGER", "center_km REAL", "center_name TEXT", "location_score REAL"]) {
     try {
       db.exec(`ALTER TABLE ${table} ADD COLUMN ${col}`);
     } catch {}
   }
 db.exec("CREATE INDEX IF NOT EXISTS favorites_list ON favorites(list_id)");
+// centros de pueblos ya geocodificados (Nominatim pide no repetir consultas)
+db.exec("CREATE TABLE IF NOT EXISTS places (key TEXT PRIMARY KEY, name TEXT, lat REAL, lng REAL, created_at TEXT NOT NULL DEFAULT (datetime('now')))");
 
 // ---------- contraseñas (scrypt, de la librería estándar) ----------
 const SCRYPT = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };

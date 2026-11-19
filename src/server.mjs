@@ -3,7 +3,7 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
-import { runSearch, AMENITIES, zoneGeometry } from "./searchScraper.mjs";
+import { runSearch, createGeocoder, AMENITIES, zoneGeometry } from "./searchScraper.mjs";
 import { DEFAULTS, DESTINATIONS, ORIGIN } from "./tripConfig.mjs";
 import {
   db, createUser, randomPassword, hashPassword, verifyPassword, setPassword, createSession, sessionUser, deleteSession,
@@ -29,17 +29,28 @@ purgeExpiredSessions();
 db.prepare("UPDATE searches SET status='error', error='Interrumpida (se reinició el servidor)' WHERE status='running'").run();
 
 const insertResult = db.prepare(`INSERT INTO results
-  (search_id, zone, provider, url, title, location, total_price, per_person_night, private_rooms, bathrooms, beds, rating, reviews, fits_budget, fits_privacy, lat, lng, free_cancellation, is_new, guest_favorite)
-  VALUES (@search_id, @zone, @provider, @url, @title, @location, @totalPrice, @perPersonNight, @privateRooms, @bathrooms, @beds, @rating, @reviews, @fitsBudget, @fitsPrivacy, @lat, @lng, @freeCancellation, @isNew, @guestFavorite)`);
+  (search_id, zone, provider, url, title, location, total_price, per_person_night, private_rooms, bathrooms, beds, rating, reviews, fits_budget, fits_privacy, lat, lng, free_cancellation, is_new, guest_favorite, center_km, center_name, location_score)
+  VALUES (@search_id, @zone, @provider, @url, @title, @location, @totalPrice, @perPersonNight, @privateRooms, @bathrooms, @beds, @rating, @reviews, @fitsBudget, @fitsPrivacy, @lat, @lng, @freeCancellation, @isNew, @guestFavorite, @centerKm, @centerName, @locationScore)`);
 const insertMany = db.transaction((searchId, items) => {
   for (const i of items) {
     insertResult.run({
       beds: null, bathrooms: null, rating: null, reviews: null, location: null, lat: null, lng: null,
-      freeCancellation: null, isNew: null, guestFavorite: null, ...i,
+      freeCancellation: null, isNew: null, guestFavorite: null, centerKm: null, centerName: null, locationScore: null, ...i,
       search_id: searchId, fitsBudget: i.fitsBudget ? 1 : 0, fitsPrivacy: i.fitsPrivacy ? 1 : 0
     });
   }
 });
+
+const geocode = createGeocoder(
+  {
+    get: (key) => {
+      const row = db.prepare("SELECT name, lat, lng FROM places WHERE key=?").get(key);
+      return row === undefined ? undefined : row.name == null ? null : row; // null guardado = «no se encontró»
+    },
+    set: (key, v) => db.prepare("INSERT OR REPLACE INTO places (key, name, lat, lng) VALUES (?, ?, ?, ?)").run(key, v?.name ?? null, v?.lat ?? null, v?.lng ?? null)
+  },
+  { userAgent: "Cobijo/1.0 (+https://github.com/daespasa/cobijo)" }
+);
 
 // --- Cola: una búsqueda a la vez (un solo Chromium vivo como mucho) ---
 let running = null; // { id, cancel }
@@ -52,6 +63,7 @@ function pump() {
   db.prepare("UPDATE searches SET status='running' WHERE id=?").run(job.id);
   runSearch(JSON.parse(next.params), {
     cancelled: () => job.cancel,
+    geocode,
     onProgress: (text) => db.prepare("UPDATE searches SET progress=? WHERE id=?").run(text, job.id),
     onItems: (items) => insertMany(job.id, items)
   })
@@ -132,6 +144,7 @@ export function cleanPrefs(b) {
       privacy: b.filters.privacy !== false,
       freeOnly: b.filters.freeOnly === true,
       minRating: [0, 7, 8, 9].includes(b.filters.minRating) ? b.filters.minRating : 0,
+      maxCenterKm: [0, 1, 3, 10].includes(b.filters.maxCenterKm) ? b.filters.maxCenterKm : 0,
       sort: SORTS.includes(b.filters.sort) ? b.filters.sort : "price",
       provider: PROVIDER_FILTERS.includes(b.filters.provider) ? b.filters.provider : "all"
     };
@@ -151,14 +164,14 @@ function staticFile(pathname) {
   return file;
 }
 
-// Cabeceras de seguridad para todo: solo cargamos lo nuestro, el mapa de OpenFreeMap, Nominatim (lugares) y OSRM (rutas)
+// Cabeceras de seguridad para todo: solo cargamos lo nuestro, el mapa de OpenFreeMap y Nominatim (lugares)
 const SECURITY_HEADERS = {
   "content-security-policy": [
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'", // Leaflet y las animaciones ponen estilos en línea
     "img-src 'self' data: blob: https://tiles.openfreemap.org https://tile.openstreetmap.org", // OSM: respaldo sin WebGL
-    "connect-src 'self' https://tiles.openfreemap.org https://nominatim.openstreetmap.org https://router.project-osrm.org",
+    "connect-src 'self' https://tiles.openfreemap.org https://nominatim.openstreetmap.org",
     "worker-src 'self' blob:", // MapLibre dibuja el mapa en un web worker
     "font-src 'self'",
     "frame-ancestors 'none'",

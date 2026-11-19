@@ -15,8 +15,9 @@ Encontrar una casa para 8 personas, 4 parejas que quieren su habitación y 2 per
 - **Zonas en el mapa, en cualquier país**: dibuja un polígono punto a punto o marca un radio en km. Puedes combinar varias zonas en una búsqueda o añadir de golpe una lista de ciudades sugeridas. El mapa sale en español (Venecia, Londres, Múnich…).
 - **Booking y Airbnb a la vez**, con los filtros de cada web: alojamiento entero, mascotas, dormitorios mínimos, cancelación gratis y comodidades (parking, piscina, chimenea…).
 - **Resultados exactos**: se leen las coordenadas de cada anuncio y se descarta lo que cae fuera de tu zona. Cada resultado aparece en el mapa con su precio.
-- **Pensado para grupos**: precio por persona y noche, total del viaje, aviso si no hay un dormitorio por pareja y tiempo en coche desde vuestro punto de salida.
-- **Para decidir**: nota de cada web (y nota mínima comparable entre las dos), «Recomendación del viajero» de Airbnb, alojamientos nuevos sin valoraciones y orden por precio, nota o cercanía.
+- **Pensado para grupos**: precio por persona y noche, total del viaje, aviso si no hay un dormitorio por pareja.
+- **Bien situado**: distancia de cada alojamiento al centro de su ciudad o pueblo, nota de ubicación de Booking y filtro «a 1/3/10 km del centro o menos».
+- **Para decidir**: nota de cada web (y nota mínima comparable entre las dos), «Recomendación del viajero» de Airbnb, alojamientos nuevos sin valoraciones y orden por precio, nota o lo céntrico que está.
 - **Usuarios**: historial de búsquedas, listas de alojamientos guardados («Fin de año», «Las que votamos»…) y preferencias por persona (punto de salida, valores del formulario y filtros).
 - **Ligero**: servidor Node sin framework (~50 MB en reposo). Chromium solo se abre mientras dura una búsqueda.
 
@@ -119,14 +120,14 @@ scripts/                lanzador de escritorio para Linux
 - Booking y Airbnb cambian su HTML a menudo. Si una zona sale vacía, Cobijo lo indica con un enlace para abrir esa búsqueda en la web y comprobarla.
 - El radio de Booking es aproximado («y alrededores»); por eso se recorta con las coordenadas de cada anuncio.
 - Los precios son los del momento de la búsqueda. Confirma siempre en la web antes de reservar, sobre todo el suplemento por mascotas.
-- El tiempo en coche usa el servidor público de demostración de OSRM; si no responde, se muestra la distancia en línea recta.
+- El centro de cada ciudad es el punto que marca OpenStreetMap (normalmente el casco histórico o el ayuntamiento). Se consulta una vez por municipio a Nominatim, respetando su límite de 1 petición por segundo, y se guarda en caché: la primera búsqueda en una zona nueva tarda unos segundos más.
 - En Airbnb la cancelación gratis solo se conoce si la pides al buscar (sus tarjetas no lo indican).
 
 ## Aviso
 
 Proyecto personal para uso privado y con moderación. Automatizar búsquedas puede ir en contra de las condiciones de uso de Booking y Airbnb: respeta sus términos y no lo uses para extraer datos de forma masiva ni con fines comerciales. Cobijo no está afiliado a ninguna de las dos.
 
-Mapa de [OpenFreeMap](https://openfreemap.org) © [OpenMapTiles](https://www.openmaptiles.org) © [OpenStreetMap](https://www.openstreetmap.org/copyright), dibujado con [MapLibre](https://maplibre.org). Búsqueda de lugares con [Nominatim](https://nominatim.org) y rutas en coche con [OSRM](https://project-osrm.org).
+Mapa de [OpenFreeMap](https://openfreemap.org) © [OpenMapTiles](https://www.openmaptiles.org) © [OpenStreetMap](https://www.openstreetmap.org/copyright), dibujado con [MapLibre](https://maplibre.org). Búsqueda de lugares y centros de ciudades con [Nominatim](https://nominatim.org).
 
 ## Licencia
 

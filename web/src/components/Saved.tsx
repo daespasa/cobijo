@@ -9,7 +9,6 @@ import {
 } from "@/components/ui/alert-dialog"
 import { ResultCard } from "@/components/Results"
 import type { Favorite, SavedList } from "@/lib/api"
-import type { Travel } from "@/lib/travel"
 import { cn } from "@/lib/utils"
 
 type Props = {
@@ -22,11 +21,9 @@ type Props = {
   onDelete: (id: number) => Promise<void>
   onLocate: (f: Favorite) => void
   saveButton: (f: Favorite) => React.ReactNode
-  travelOf: (f: Favorite) => Travel | null
-  originName: string
 }
 
-export function Saved({ lists, items, selectedId, onSelect, onCreate, onRename, onDelete, onLocate, saveButton, travelOf, originName }: Props) {
+export function Saved({ lists, items, selectedId, onSelect, onCreate, onRename, onDelete, onLocate, saveButton }: Props) {
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState("")
@@ -156,7 +153,7 @@ export function Saved({ lists, items, selectedId, onSelect, onCreate, onRename, 
               <AnimatePresence initial={false}>
                 {shown.map((f) => (
                   <m.li key={f.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -24 }} className="group rounded-xl border border-border bg-card p-4">
-                    <ResultCard r={f} action={saveButton(f)} onLocate={() => onLocate(f)} travel={travelOf(f)} originName={originName} />
+                    <ResultCard r={f} action={saveButton(f)} onLocate={() => onLocate(f)} />
                     <p className="mt-2 text-xs text-muted-foreground">Guardado el {new Date(f.created_at.replace(" ", "T") + "Z").toLocaleDateString("es-ES", { day: "numeric", month: "long" })}</p>
                   </m.li>
                 ))}

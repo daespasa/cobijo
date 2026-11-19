@@ -75,7 +75,9 @@ export function buildBookingUrl(q, zone) {
     group_children: 0,
     selected_currency: "EUR",
     lang: "es",
-    order: "price",
+    // por distancia al punto buscado: así los primeros resultados caen dentro de la zona
+    // (con order=price Booking devuelve lo más barato de un área mucho mayor y la zona se queda vacía)
+    order: "distance_from_search",
     nflt: nflt.join(";")
   };
   for (const [k, v] of Object.entries(p)) u.searchParams.set(k, String(v));
@@ -138,7 +140,10 @@ export function parseBookingCard(text) {
     bathrooms: bathrooms || null,
     units: units || null,
     totalPrice: price,
-    freeCancellation: /cancelaci[oó]n gratis/i.test(text) ? 1 : 0
+    freeCancellation: /cancelaci[oó]n gratis/i.test(text) ? 1 : 0,
+    // (su «a X km del centro» se mide desde el punto buscado, no desde el centro del pueblo: no nos sirve)
+    // nota de ubicación que dan los huéspedes («Ubicación 9,5»)
+    locationScore: num(/Ubicaci[oó]n\s+(\d+(?:,\d+)?)/, text)
   };
 }
 
@@ -318,6 +323,14 @@ export async function runSearch(q, hooks = {}, { headed = false } = {}) {
             const id = it.url.split("?")[0];
             return !seen.has(id) && seen.add(id);
           });
+        // distancia al centro de su pueblo o ciudad (geocodificado una vez y en caché)
+        for (const it of fresh) {
+          if (it.lat == null || !hooks.geocode || hooks.cancelled?.()) continue;
+          const center = await hooks.geocode(it.lat, it.lng);
+          if (!center) continue;
+          it.centerName = center.name;
+          it.centerKm = Math.round(haversineKm(it.lat, it.lng, center.lat, center.lng) * 10) / 10;
+        }
         hooks.onItems?.(fresh.map((it) => evaluate(it, q)), step);
         if (!items.length) failures.push({ ...step, zone: step.zone.name, error: "0 resultados", searchUrl });
       } catch (e) {
@@ -328,4 +341,51 @@ export async function runSearch(q, hooks = {}, { headed = false } = {}) {
     await browser.close();
   }
   return { failures };
+}
+
+// Centro de la ciudad o pueblo en el que cae un punto, con Nominatim (1 petición/s como pide su política) y caché.
+// 1) qué municipio es (reverse, cacheado por celdas de ~5 km); 2) dónde está su centro (el punto «place» de OSM).
+// cache = { get(key) -> {name,lat,lng}|null|undefined, set(key, value|null) }
+export function createGeocoder(cache, { userAgent = "Cobijo (self-hosted)" } = {}) {
+  let last = 0;
+  const ask = async (path) => {
+    const wait = last + 1100 - Date.now();
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    last = Date.now();
+    const r = await fetch(`https://nominatim.openstreetmap.org/${path}&format=jsonv2&accept-language=es`, {
+      headers: { "user-agent": userAgent },
+      signal: AbortSignal.timeout(8000)
+    });
+    return r.json();
+  };
+  const cached = async (key, load) => {
+    const hit = cache.get(key);
+    if (hit !== undefined) return hit;
+    try {
+      const value = await load();
+      cache.set(key, value);
+      return value;
+    } catch {
+      return null; // sin red: no se guarda, se reintenta en otra búsqueda
+    }
+  };
+  const centerOf = (name, lat, lng) =>
+    cached(`center|${name.toLowerCase()}|${Math.round(lat * 2)},${Math.round(lng * 2)}`, async () => {
+      const d = 0.3; // el pueblo con ese nombre que está cerca del alojamiento, no otro homónimo
+      const [hit] = await ask(
+        `search?q=${encodeURIComponent(name)}&featureType=settlement&limit=1&bounded=1&viewbox=${lng - d},${lat + d},${lng + d},${lat - d}`
+      );
+      return hit ? { name, lat: Number(hit.lat), lng: Number(hit.lon) } : null;
+    });
+  // El municipio se saca de las coordenadas, no del nombre del anuncio: Airbnb a veces pone un barrio
+  // («Albaicín») y hay pueblos homónimos cerca. Celdas de ~3 km: pocas consultas y pocos errores en las lindes.
+  return async (lat, lng) => {
+    const cell = `${Math.round(lat / 0.03)},${Math.round(lng / 0.03)}`;
+    const town = await cached(`town|${cell}`, async () => {
+      const a = (await ask(`reverse?lat=${lat}&lon=${lng}&zoom=10`))?.address ?? {};
+      const name = a.city || a.town || a.village || a.municipality;
+      return name ? { name, lat: null, lng: null } : null;
+    });
+    return town ? centerOf(town.name, lat, lng) : null;
+  };
 }
