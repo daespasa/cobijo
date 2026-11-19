@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Cobijo
+Comment=Busca alojamiento para grupos en Booking y Airbnb dentro de una zona del mapa
+Icon=go-home
+Terminal=false
+Categories=Utility;
+Exec=env PATH=@NODE_BIN@:/usr/local/bin:/usr/bin:/bin npm --prefix @ROOT@ run app
