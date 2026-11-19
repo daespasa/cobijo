@@ -1,0 +1,27 @@
+# dependencias
+node_modules/
+web/node_modules/
+
+# datos locales: base de datos (usuarios, hashes, sesiones), logs y resultados scrapeados
+data/
+output/
+*.sqlite
+*.sqlite-*
+*.db
+*.log
+
+# build de la web (se genera con npm run build)
+public/
+web/dist/
+
+# entorno y secretos
+.env
+.env.*
+!.env.example
+
+# editor / sistema / agentes
+.DS_Store
+.vscode/
+.idea/
+.claude/
+*.local

@@ -1,0 +1,34 @@
+{
+  "name": "cobijo",
+  "version": "1.0.0",
+  "description": "Busca alojamiento para grupos en Booking y Airbnb dentro de una zona que dibujas en el mapa.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "author": "daespasa",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/daespasa/cobijo.git"
+  },
+  "homepage": "https://github.com/daespasa/cobijo#readme",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "scrape": "node src/index.mjs",
+    "scrape:headed": "node src/index.mjs --headed",
+    "scrape:restaurants": "node src/restaurants.mjs",
+    "scrape:restaurants:headed": "node src/restaurants.mjs --headed",
+    "test": "node --test src/",
+    "start": "node src/server.mjs",
+    "app": "mkdir -p data; curl -sf -o /dev/null http://127.0.0.1:8787/ || (setsid node src/server.mjs >> data/server.log 2>&1 &) ; sleep 1; xdg-open http://127.0.0.1:8787",
+    "build": "npm --prefix web run build",
+    "dev": "npm --prefix web run dev",
+    "install:desktop": "sh scripts/install-desktop.sh",
+    "users": "node src/users.mjs"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.11.1",
+    "playwright": "^1.55.0"
+  }
+}
